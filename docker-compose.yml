@@ -1,0 +1,375 @@
+version: '3.8'
+
+networks:
+  tscc-network:
+    driver: bridge
+
+volumes:
+  ollama_data:
+    driver: local
+  redis_data:
+    driver: local
+  kafka_data:
+    driver: local
+  zookeeper_data:
+    driver: local
+  redis_insight_data:
+    driver: local
+
+services:
+  # Redis for caching and state management
+  redis:
+    image: redis:7-alpine
+    container_name: tscc-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --requirepass YourSecurePasswordHere123!
+    networks:
+      - tscc-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 30s
+      timeout: 3s
+      retries: 5
+
+  # Zookeeper for Kafka coordination
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: tscc-zookeeper
+    restart: unless-stopped
+    ports:
+      - "2181:2181"
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_SYNC_LIMIT: 2
+    networks:
+      - tscc-network
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo 'ruok' | nc localhost 2181"]
+      interval: 30s
+      timeout: 3s
+      retries: 5
+
+  # Kafka message broker
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: tscc-kafka
+    restart: unless-stopped
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+    networks:
+      - tscc-network
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Ollama LLM server with Gemma model
+  ollama:
+    image: ollama/ollama:latest
+    container_name: tscc-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_ORIGINS=*
+    networks:
+      - tscc-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    # Uncomment below if you don't have GPU support
+    # runtime: nvidia
+
+  # Ollama model initialization
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: tscc-ollama-init
+    depends_on:
+      ollama:
+        condition: service_healthy
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=ollama:11434
+    networks:
+      - tscc-network
+    command: >
+      sh -c "
+        ollama pull gemma:2b &&
+        ollama pull gemma:7b &&
+        echo 'Models downloaded successfully'
+      "
+    restart: "no"
+
+  # Super Agent - Main orchestrator
+  super-agent:
+    build:
+      context: ./super_agent
+      dockerfile: Dockerfile
+    container_name: tscc-super-agent
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+      - "9000:9000"  # Prometheus metrics
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=YourSecurePasswordHere123!
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - OLLAMA_URL=http://ollama:11434
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - ./config:/app/config:ro
+      - ./data:/app/data:ro
+    networks:
+      - tscc-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Fraud Detection Sub-Agent
+  fraud-detection:
+    build:
+      context: ./sub_agents/fraud_detection
+      dockerfile: Dockerfile
+    container_name: tscc-fraud-detection
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      super-agent:
+        condition: service_healthy
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=YourSecurePasswordHere123!
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - PYTHONUNBUFFERED=1
+      - AGENT_NAME=fraud-detection
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - ./sub_agents/fraud_detection/models:/app/models
+      - ./data:/app/data:ro
+    networks:
+      - tscc-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Counterfeit Detection Sub-Agent
+  counterfeit-detection:
+    build:
+      context: ./sub_agents/counterfeit_detection
+      dockerfile: Dockerfile
+    container_name: tscc-counterfeit-detection
+    restart: unless-stopped
+    ports:
+      - "8002:8002"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      super-agent:
+        condition: service_healthy
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=YourSecurePasswordHere123!
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - PYTHONUNBUFFERED=1
+      - AGENT_NAME=counterfeit-detection
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - ./sub_agents/counterfeit_detection/models:/app/models
+      - ./data:/app/data:ro
+    networks:
+      - tscc-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Review Spam Detection Sub-Agent
+  review-spam:
+    build:
+      context: ./sub_agents/review_spam
+      dockerfile: Dockerfile
+    container_name: tscc-review-spam
+    restart: unless-stopped
+    ports:
+      - "8003:8003"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      super-agent:
+        condition: service_healthy
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=YourSecurePasswordHere123!
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - PYTHONUNBUFFERED=1
+      - AGENT_NAME=review-spam
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - ./sub_agents/review_spam/models:/app/models
+      - ./data:/app/data:ro
+    networks:
+      - tscc-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Return Anomaly Detection Sub-Agent
+  return-anomaly:
+    build:
+      context: ./sub_agents/return_anomaly
+      dockerfile: Dockerfile
+    container_name: tscc-return-anomaly
+    restart: unless-stopped
+    ports:
+      - "8004:8004"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      super-agent:
+        condition: service_healthy
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-defaultpass}
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - PYTHONUNBUFFERED=1
+      - AGENT_NAME=return-anomaly
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - ./sub_agents/return_anomaly/models:/app/models
+      - ./data:/app/data:ro
+    networks:
+      - tscc-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8004/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # React Dashboard
+  dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+    container_name: tscc-dashboard
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      super-agent:
+        condition: service_healthy
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000
+      - REACT_APP_WS_URL=ws://localhost:8000/ws
+      - NODE_ENV=production
+    networks:
+      - tscc-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Optional: Kafka UI for monitoring
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: tscc-kafka-ui
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_CLUSTERS_0_NAME: tscc-cluster
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+    networks:
+      - tscc-network
+    profiles:
+      - monitoring
+
+  # Optional: Redis Insight for Redis monitoring
+  redis-insight:
+    image: redislabs/redisinsight:latest
+    container_name: tscc-redis-insight
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    volumes:
+      - redis_insight_data:/db
+    networks:
+      - tscc-network
+    profiles:
+      - monitoring
+

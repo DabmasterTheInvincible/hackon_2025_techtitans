@@ -1,0 +1,396 @@
+{
+  "events": [
+    {
+      "event_id": "evt_001",
+      "timestamp": "2025-06-20T10:30:00Z",
+      "event_type": "transaction",
+      "source": "payment_gateway",
+      "data": {
+        "transaction_id": "txn_12345",
+        "user_id": "user_67890",
+        "amount": 1500.00,
+        "currency": "USD",
+        "payment_method": "credit_card",
+        "card_last_four": "1234",
+        "merchant_id": "merchant_001",
+        "ip_address": "192.168.1.100",
+        "device_fingerprint": "fp_abc123",
+        "location": {
+          "country": "US",
+          "state": "CA",
+          "city": "San Francisco",
+          "zip": "94102"
+        },
+        "velocity_checks": {
+          "transactions_last_hour": 1,
+          "transactions_last_day": 3,
+          "amount_last_hour": 1500.00,
+          "amount_last_day": 2100.00
+        }
+      },
+      "target_agents": ["fraud_detection"]
+    },
+    {
+      "event_id": "evt_002",
+      "timestamp": "2025-06-20T10:35:00Z",
+      "event_type": "transaction",
+      "source": "payment_gateway",
+      "data": {
+        "transaction_id": "txn_12346",
+        "user_id": "user_67891",
+        "amount": 50.00,
+        "currency": "USD",
+        "payment_method": "credit_card",
+        "card_last_four": "5678",
+        "merchant_id": "merchant_002",
+        "ip_address": "10.0.0.1",
+        "device_fingerprint": "fp_def456",
+        "location": {
+          "country": "RU",
+          "state": "Moscow",
+          "city": "Moscow",
+          "zip": "101000"
+        },
+        "velocity_checks": {
+          "transactions_last_hour": 15,
+          "transactions_last_day": 47,
+          "amount_last_hour": 750.00,
+          "amount_last_day": 2350.00
+        }
+      },
+      "target_agents": ["fraud_detection"]
+    },
+    {
+      "event_id": "evt_003",
+      "timestamp": "2025-06-20T10:40:00Z",
+      "event_type": "product_listing",
+      "source": "marketplace_api",
+      "data": {
+        "listing_id": "prod_789",
+        "seller_id": "seller_456",
+        "product_name": "Genuine Nike Air Max 270",
+        "category": "footwear",
+        "price": 150.00,
+        "currency": "USD",
+        "brand": "Nike",
+        "images": [
+          "https://example.com/images/prod_789_1.jpg",
+          "https://example.com/images/prod_789_2.jpg"
+        ],
+        "description": "Brand new Nike Air Max 270 in original packaging. 100% authentic with receipt included.",
+        "seller_metrics": {
+          "account_age_days": 30,
+          "total_listings": 50,
+          "feedback_score": 4.2,
+          "total_sales": 25
+        },
+        "image_analysis": {
+          "image_hash": "hash_abc123",
+          "similar_images_found": 15,
+          "quality_score": 0.75
+        }
+      },
+      "target_agents": ["counterfeit_detection"]
+    },
+    {
+      "event_id": "evt_004",
+      "timestamp": "2025-06-20T10:45:00Z",
+      "event_type": "product_listing",
+      "source": "marketplace_api",
+      "data": {
+        "listing_id": "prod_790",
+        "seller_id": "seller_457",
+        "product_name": "Authentic Rolex Submariner",
+        "category": "watches",
+        "price": 5000.00,
+        "currency": "USD",
+        "brand": "Rolex",
+        "images": [
+          "https://example.com/images/prod_790_1.jpg"
+        ],
+        "description": "Authentic Rolex Submariner, barely used. Perfect condition, no scratches.",
+        "seller_metrics": {
+          "account_age_days": 7,
+          "total_listings": 1,
+          "feedback_score": 0.0,
+          "total_sales": 0
+        },
+        "image_analysis": {
+          "image_hash": "hash_def456",
+          "similar_images_found": 100,
+          "quality_score": 0.35
+        }
+      },
+      "target_agents": ["counterfeit_detection"]
+    },
+    {
+      "event_id": "evt_005",
+      "timestamp": "2025-06-20T10:50:00Z",
+      "event_type": "review_submission",
+      "source": "review_system",
+      "data": {
+        "review_id": "rev_001",
+        "product_id": "prod_123",
+        "user_id": "user_999",
+        "rating": 5,
+        "review_text": "This product is absolutely amazing! Best purchase I've ever made. Five stars without a doubt. Everyone should buy this immediately!",
+        "submission_timestamp": "2025-06-20T10:50:00Z",
+        "user_metadata": {
+          "account_age_days": 2,
+          "total_reviews": 1,
+          "verified_purchase": false,
+          "review_velocity": {
+            "reviews_last_hour": 1,
+            "reviews_last_day": 1
+          }
+        },
+        "text_analysis": {
+          "sentiment_score": 0.95,
+          "readability_score": 0.60,
+          "keyword_density": 0.85,
+          "similar_reviews_found": 0
+        }
+      },
+      "target_agents": ["review_spam"]
+    },
+    {
+      "event_id": "evt_006",
+      "timestamp": "2025-06-20T10:55:00Z",
+      "event_type": "review_submission",
+      "source": "review_system",
+      "data": {
+        "review_id": "rev_002",
+        "product_id": "prod_124",
+        "user_id": "user_888",
+        "rating": 1,
+        "review_text": "Terrible quality, broke after one day. Don't waste your money on this garbage. Seller is a scammer.",
+        "submission_timestamp": "2025-06-20T10:55:00Z",
+        "user_metadata": {
+          "account_age_days": 1,
+          "total_reviews": 25,
+          "verified_purchase": false,
+          "review_velocity": {
+            "reviews_last_hour": 5,
+            "reviews_last_day": 25
+          }
+        },
+        "text_analysis": {
+          "sentiment_score": 0.05,
+          "readability_score": 0.70,
+          "keyword_density": 0.90,
+          "similar_reviews_found": 12
+        }
+      },
+      "target_agents": ["review_spam"]
+    },
+    {
+      "event_id": "evt_007",
+      "timestamp": "2025-06-20T11:00:00Z",
+      "event_type": "return_request",
+      "source": "returns_api",
+      "data": {
+        "return_id": "ret_001",
+        "order_id": "ord_12345",
+        "user_id": "user_777",
+        "product_id": "prod_456",
+        "return_reason": "defective_item",
+        "return_description": "Item arrived damaged, screen is cracked",
+        "return_value": 299.99,
+        "currency": "USD",
+        "purchase_date": "2025-06-18T14:30:00Z",
+        "return_request_date": "2025-06-20T11:00:00Z",
+        "shipping_address": {
+          "country": "US",
+          "state": "NY",
+          "city": "New York",
+          "zip": "10001"
+        },
+        "user_return_history": {
+          "total_returns": 2,
+          "returns_last_30_days": 1,
+          "return_rate": 0.10,
+          "avg_return_value": 199.99
+        }
+      },
+      "target_agents": ["return_anomaly"]
+    },
+    {
+      "event_id": "evt_008",
+      "timestamp": "2025-06-20T11:05:00Z",
+      "event_type": "return_request",
+      "source": "returns_api",
+      "data": {
+        "return_id": "ret_002",
+        "order_id": "ord_12346",
+        "user_id": "user_666",
+        "product_id": "prod_789",
+        "return_reason": "not_as_described",
+        "return_description": "Wrong size, need to exchange",
+        "return_value": 1200.00,
+        "currency": "USD",
+        "purchase_date": "2025-06-20T10:30:00Z",
+        "return_request_date": "2025-06-20T11:05:00Z",
+        "shipping_address": {
+          "country": "US",
+          "state": "CA",
+          "city": "Los Angeles",
+          "zip": "90210"
+        },
+        "user_return_history": {
+          "total_returns": 15,
+          "returns_last_30_days": 8,
+          "return_rate": 0.85,
+          "avg_return_value": 950.00
+        }
+      },
+      "target_agents": ["return_anomaly"]
+    },
+    {
+      "event_id": "evt_009",
+      "timestamp": "2025-06-20T11:10:00Z",
+      "event_type": "transaction",
+      "source": "payment_gateway",
+      "data": {
+        "transaction_id": "txn_12347",
+        "user_id": "user_555",
+        "amount": 10000.00,
+        "currency": "USD",
+        "payment_method": "wire_transfer",
+        "merchant_id": "merchant_003",
+        "ip_address": "203.0.113.1",
+        "device_fingerprint": "fp_ghi789",
+        "location": {
+          "country": "NG",
+          "state": "Lagos",
+          "city": "Lagos",
+          "zip": "100001"
+        },
+        "velocity_checks": {
+          "transactions_last_hour": 1,
+          "transactions_last_day": 1,
+          "amount_last_hour": 10000.00,
+          "amount_last_day": 10000.00
+        }
+      },
+      "target_agents": ["fraud_detection"]
+    },
+    {
+      "event_id": "evt_010",
+      "timestamp": "2025-06-20T11:15:00Z",
+      "event_type": "review_submission",
+      "source": "review_system",
+      "data": {
+        "review_id": "rev_003",
+        "product_id": "prod_125",
+        "user_id": "user_444",
+        "rating": 4,
+        "review_text": "Good quality product, arrived on time. The material feels durable and the color matches the description. Would recommend to others looking for a reliable option in this price range.",
+        "submission_timestamp": "2025-06-20T11:15:00Z",
+        "user_metadata": {
+          "account_age_days": 180,
+          "total_reviews": 12,
+          "verified_purchase": true,
+          "review_velocity": {
+            "reviews_last_hour": 1,
+            "reviews_last_day": 1
+          }
+        },
+        "text_analysis": {
+          "sentiment_score": 0.75,
+          "readability_score": 0.80,
+          "keyword_density": 0.45,
+          "similar_reviews_found": 2
+        }
+      },
+      "target_agents": ["review_spam"]
+    },
+    {
+      "event_id": "evt_011",
+      "timestamp": "2025-06-20T11:20:00Z",
+      "event_type": "product_listing",
+      "source": "marketplace_api",
+      "data": {
+        "listing_id": "prod_791",
+        "seller_id": "seller_458",
+        "product_name": "Apple iPhone 15 Pro Max",
+        "category": "electronics",
+        "price": 899.99,
+        "currency": "USD",
+        "brand": "Apple",
+        "images": [
+          "https://example.com/images/prod_791_1.jpg",
+          "https://example.com/images/prod_791_2.jpg",
+          "https://example.com/images/prod_791_3.jpg"
+        ],
+        "description": "Brand new iPhone 15 Pro Max, factory sealed. Ships from authorized retailer with full warranty.",
+        "seller_metrics": {
+          "account_age_days": 365,
+          "total_listings": 200,
+          "feedback_score": 4.8,
+          "total_sales": 150
+        },
+        "image_analysis": {
+          "image_hash": "hash_jkl012",
+          "similar_images_found": 5,
+          "quality_score": 0.92
+        }
+      },
+      "target_agents": ["counterfeit_detection"]
+    },
+    {
+      "event_id": "evt_012",
+      "timestamp": "2025-06-20T11:25:00Z",
+      "event_type": "return_request",
+      "source": "returns_api",
+      "data": {
+        "return_id": "ret_003",
+        "order_id": "ord_12347",
+        "user_id": "user_333",
+        "product_id": "prod_101",
+        "return_reason": "changed_mind",
+        "return_description": "No longer need this item",
+        "return_value": 45.99,
+        "currency": "USD",
+        "purchase_date": "2025-06-15T09:20:00Z",
+        "return_request_date": "2025-06-20T11:25:00Z",
+        "shipping_address": {
+          "country": "US",
+          "state": "TX",
+          "city": "Austin",
+          "zip": "73301"
+        },
+        "user_return_history": {
+          "total_returns": 3,
+          "returns_last_30_days": 2,
+          "return_rate": 0.15,
+          "avg_return_value": 67.50
+        }
+      },
+      "target_agents": ["return_anomaly"]
+    }
+  ],
+  "metadata": {
+    "total_events": 12,
+    "date_range": {
+      "start": "2025-06-20T10:30:00Z",
+      "end": "2025-06-20T11:25:00Z"
+    },
+    "event_types": {
+      "transaction": 3,
+      "product_listing": 3,
+      "review_submission": 3,
+      "return_request": 3
+    },
+    "target_agents": {
+      "fraud_detection": 3,
+      "counterfeit_detection": 3,
+      "review_spam": 3,
+      "return_anomaly": 3
+    },
+    "risk_levels": {
+      "high": ["evt_002", "evt_004", "evt_006", "evt_008", "evt_009"],
+      "medium": ["evt_001", "evt_003", "evt_005", "evt_007"],
+      "low": ["evt_010", "evt_011", "evt_012"]
+    }
+  }
+}

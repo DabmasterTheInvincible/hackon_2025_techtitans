@@ -1,0 +1,387 @@
+# Trust & Safety Command Center (TSCC) Kafka Configuration
+# This configuration defines Kafka cluster settings, topic configurations,
+# producer/consumer settings, and streaming pipeline parameters for real-time event processing.
+
+# Kafka Cluster Configuration
+cluster:
+  bootstrap_servers:
+    - "kafka-1:9092"
+    - "kafka-2:9092"
+    - "kafka-3:9092"
+  
+  # Cluster settings
+  num_partitions_default: 12
+  replication_factor: 3
+  min_insync_replicas: 2
+  
+  # Performance tuning
+  socket_send_buffer_bytes: 102400
+  socket_receive_buffer_bytes: 102400
+  socket_request_max_bytes: 104857600
+  
+# Topic Configurations for TSCC Pipeline
+topics:
+  # Incoming marketplace events
+  marketplace_events:
+    name: "tscc.marketplace.events"
+    partitions: 24
+    replication_factor: 3
+    cleanup_policy: "delete"
+    retention_hours: 168  # 7 days
+    max_message_bytes: 10485760  # 10MB
+    compression_type: "snappy"
+    
+  # MCP (Model Context Protocol) events
+  mcp_events:
+    name: "tscc.mcp.events"
+    partitions: 24
+    replication_factor: 3
+    cleanup_policy: "delete"
+    retention_hours: 72  # 3 days
+    max_message_bytes: 5242880  # 5MB
+    compression_type: "snappy"
+    
+  # Sub-agent responses
+  agent_responses:
+    name: "tscc.agent.responses"
+    partitions: 12
+    replication_factor: 3
+    cleanup_policy: "delete"
+    retention_hours: 168  # 7 days
+    max_message_bytes: 2097152  # 2MB
+    compression_type: "gzip"
+    
+  # High-risk alerts for immediate attention
+  high_risk_alerts:
+    name: "tscc.alerts.high_risk"
+    partitions: 6
+    replication_factor: 3
+    cleanup_policy: "delete"
+    retention_hours: 720  # 30 days
+    max_message_bytes: 1048576  # 1MB
+    compression_type: "gzip"
+    
+  # Investigation briefs from LLM
+  investigation_briefs:
+    name: "tscc.investigation.briefs"
+    partitions: 8
+    replication_factor: 3
+    cleanup_policy: "delete"
+    retention_hours: 2160  # 90 days
+    max_message_bytes: 2097152  # 2MB
+    compression_type: "gzip"
+    
+  # Analyst feedback for retraining
+  analyst_feedback:
+    name: "tscc.analyst.feedback"
+    partitions: 4
+    replication_factor: 3
+    cleanup_policy: "compact"  # Keep latest feedback
+    retention_hours: 8760  # 1 year
+    max_message_bytes: 524288  # 512KB
+    compression_type: "gzip"
+    
+  # Dead letter queue for failed processing
+  dead_letter_queue:
+    name: "tscc.dlq.failed_events"
+    partitions: 4
+    replication_factor: 3
+    cleanup_policy: "delete"
+    retention_hours: 168  # 7 days
+    max_message_bytes: 10485760  # 10MB
+    compression_type: "gzip"
+    
+  # Audit logs for compliance
+  audit_logs:
+    name: "tscc.audit.logs"
+    partitions: 8
+    replication_factor: 3
+    cleanup_policy: "compact"
+    retention_hours: 17520  # 2 years
+    max_message_bytes: 1048576  # 1MB
+    compression_type: "gzip"
+
+# Producer Configurations
+producers:
+  # Super Agent producer for routing events
+  super_agent:
+    client_id: "tscc-super-agent-producer"
+    acks: "all"  # Wait for all replicas
+    retries: 5
+    retry_backoff_ms: 100
+    batch_size: 16384
+    linger_ms: 5
+    buffer_memory: 33554432
+    compression_type: "snappy"
+    max_in_flight_requests_per_connection: 5
+    enable_idempotence: true
+    
+    # Topic-specific settings
+    topic_configs:
+      mcp_events:
+        key_serializer: "StringSerializer"
+        value_serializer: "JsonSerializer"
+        
+  # Sub-agent response producer
+  sub_agent:
+    client_id: "tscc-sub-agent-producer"
+    acks: "1"
+    retries: 3
+    retry_backoff_ms: 100
+    batch_size: 8192
+    linger_ms: 10
+    buffer_memory: 16777216
+    compression_type: "gzip"
+    max_in_flight_requests_per_connection: 3
+    
+    topic_configs:
+      agent_responses:
+        key_serializer: "StringSerializer"
+        value_serializer: "JsonSerializer"
+        
+  # Alert producer for high-priority notifications
+  alert_producer:
+    client_id: "tscc-alert-producer"
+    acks: "all"
+    retries: 10
+    retry_backoff_ms: 200
+    batch_size: 4096
+    linger_ms: 1  # Low latency for alerts
+    buffer_memory: 8388608
+    compression_type: "gzip"
+    max_in_flight_requests_per_connection: 1
+    enable_idempotence: true
+    
+    topic_configs:
+      high_risk_alerts:
+        key_serializer: "StringSerializer"
+        value_serializer: "JsonSerializer"
+
+# Consumer Configurations
+consumers:
+  # Super Agent consumer for marketplace events
+  super_agent_consumer:
+    group_id: "tscc-super-agent-group"
+    client_id: "tscc-super-agent-consumer"
+    auto_offset_reset: "latest"
+    enable_auto_commit: false
+    max_poll_records: 100
+    session_timeout_ms: 30000
+    heartbeat_interval_ms: 3000
+    fetch_min_bytes: 1
+    fetch_max_wait_ms: 500
+    max_partition_fetch_bytes: 1048576
+    
+    topics:
+      - "tscc.marketplace.events"
+      
+    deserializers:
+      key_deserializer: "StringDeserializer"
+      value_deserializer: "JsonDeserializer"
+      
+  # Sub-agent consumers for MCP events
+  fraud_detection_consumer:
+    group_id: "tscc-fraud-detection-group"
+    client_id: "tscc-fraud-consumer"
+    auto_offset_reset: "latest"
+    enable_auto_commit: false
+    max_poll_records: 50
+    session_timeout_ms: 30000
+    heartbeat_interval_ms: 3000
+    
+    topics:
+      - "tscc.mcp.events"
+      
+    # Consumer filtering based on event type
+    event_filters:
+      - "event_type IN ['product_listing', 'seller_registration', 'return_request']"
+      
+  counterfeit_detection_consumer:
+    group_id: "tscc-counterfeit-detection-group"
+    client_id: "tscc-counterfeit-consumer"
+    auto_offset_reset: "latest"
+    enable_auto_commit: false
+    max_poll_records: 30  # Slower processing due to image analysis
+    session_timeout_ms: 45000
+    heartbeat_interval_ms: 5000
+    
+    topics:
+      - "tscc.mcp.events"
+      
+    event_filters:
+      - "event_type IN ['product_listing'] AND has_images = true"
+      
+  review_spam_consumer:
+    group_id: "tscc-review-spam-group"
+    client_id: "tscc-review-spam-consumer"
+    auto_offset_reset: "latest"
+    enable_auto_commit: false
+    max_poll_records: 200  # Fast text processing
+    session_timeout_ms: 30000
+    heartbeat_interval_ms: 3000
+    
+    topics:
+      - "tscc.mcp.events"
+      
+    event_filters:
+      - "event_type = 'customer_review'"
+      
+  return_anomaly_consumer:
+    group_id: "tscc-return-anomaly-group"
+    client_id: "tscc-return-anomaly-consumer"
+    auto_offset_reset: "latest"
+    enable_auto_commit: false
+    max_poll_records: 100
+    session_timeout_ms: 30000
+    heartbeat_interval_ms: 3000
+    
+    topics:
+      - "tscc.mcp.events"
+      
+    event_filters:
+      - "event_type = 'return_request'"
+      
+  # Aggregator consumer for collecting sub-agent responses
+  mcp_aggregator_consumer:
+    group_id: "tscc-mcp-aggregator-group"
+    client_id: "tscc-mcp-aggregator-consumer"
+    auto_offset_reset: "latest"
+    enable_auto_commit: false
+    max_poll_records: 500
+    session_timeout_ms: 30000
+    heartbeat_interval_ms: 3000
+    
+    topics:
+      - "tscc.agent.responses"
+      
+  # Dashboard consumer for real-time alerts
+  dashboard_consumer:
+    group_id: "tscc-dashboard-group"
+    client_id: "tscc-dashboard-consumer"
+    auto_offset_reset: "latest"
+    enable_auto_commit: true
+    auto_commit_interval_ms: 1000
+    max_poll_records: 50
+    session_timeout_ms: 30000
+    heartbeat_interval_ms: 3000
+    
+    topics:
+      - "tscc.alerts.high_risk"
+      - "tscc.investigation.briefs"
+
+# Kafka Streams Configuration for Real-time Processing
+streams:
+  application_id: "tscc-stream-processor"
+  bootstrap_servers:
+    - "kafka-1:9092"
+    - "kafka-2:9092"
+    - "kafka-3:9092"
+    
+  # Stream processing settings
+  processing_guarantee: "exactly_once"
+  commit_interval_ms: 1000
+  cache_max_bytes_buffering: 10485760
+  num_stream_threads: 4
+  
+  # State store configuration
+  state_stores:
+    event_correlation_store:
+      type: "key_value"
+      retention_period_hours: 24
+      changelog_topic: "tscc.state.event_correlation"
+      
+    agent_response_store:
+      type: "key_value"
+      retention_period_hours: 48
+      changelog_topic: "tscc.state.agent_responses"
+      
+    risk_score_store:
+      type: "key_value"
+      retention_period_hours: 72
+      changelog_topic: "tscc.state.risk_scores"
+
+# Schema Registry Configuration (Optional - can be enabled later)
+schema_registry:
+  enabled: false  # Set to true when you want to use Avro schemas
+  url: "http://schema-registry:8081"
+  
+  # Schema evolution settings (for future use)
+  compatibility_level: "BACKWARD"
+
+# Monitoring & Metrics
+monitoring:
+  # JMX metrics export
+  jmx_enabled: true
+  jmx_port: 9999
+  
+  # Prometheus metrics
+  prometheus_enabled: true
+  prometheus_port: 8080
+  
+  # Key metrics to track
+  metrics:
+    - "kafka.producer.record-send-rate"
+    - "kafka.consumer.lag-sum"
+    - "kafka.streams.process-rate"
+    - "kafka.server.BrokerTopicMetrics.MessagesInPerSec"
+    - "kafka.server.BrokerTopicMetrics.BytesInPerSec"
+    
+# Error Handling & Resilience
+error_handling:
+  # Retry configuration
+  max_retries: 3
+  retry_backoff_ms: 1000
+  
+  # Dead letter queue settings
+  dlq_enabled: true
+  dlq_topic: "tscc.dlq.failed_events"
+  
+  # Circuit breaker settings
+  circuit_breaker:
+    failure_threshold: 5
+    recovery_timeout_ms: 30000
+    
+# Security Configuration
+security:
+  # SSL/TLS settings
+  #ssl_enabled: false  # Set to true in production
+  #ssl_keystore_location: "/etc/kafka/ssl/kafka.keystore.jks"
+  #ssl_keystore_password: "${KAFKA_KEYSTORE_PASSWORD}"
+  #ssl_truststore_location: "/etc/kafka/ssl/kafka.truststore.jks"
+  #ssl_truststore_password: "${KAFKA_TRUSTSTORE_PASSWORD}"
+  
+  # SASL authentication
+  sasl_enabled: false  # Set to true in production
+  #sasl_mechanism: "PLAIN"
+  #sasl_username: "${KAFKA_USERNAME}"
+  #sasl_password: "${KAFKA_PASSWORD}"
+  
+# Environment-specific overrides
+environments:
+  development:
+    cluster:
+      bootstrap_servers: ["localhost:9092"]
+    topics:
+      marketplace_events:
+        partitions: 3
+        replication_factor: 1
+        
+  staging:
+    cluster:
+      bootstrap_servers: 
+        - "kafka-staging-1:9092"
+        - "kafka-staging-2:9092"
+    topics:
+      marketplace_events:
+        partitions: 6
+        replication_factor: 2
+        
+  production:
+    cluster:
+      bootstrap_servers:
+        - "kafka-prod-1:9092"
+        - "kafka-prod-2:9092"
+        - "kafka-prod-3:9092"
+    security:
+      ssl_enabled: true
+      sasl_enabled: true

@@ -1,0 +1,258 @@
+# Trust & Safety Command Center (TSCC) Agent Configuration
+# This configuration defines the Super Agent and Sub-Agent routing, MCP protocol settings,
+# and agent-specific parameters for the marketplace trust & safety platform.
+
+super_agent:
+  name: "TSCC-SuperAgent"
+  version: "1.0.0"
+  host: "0.0.0.0"
+  port: 8000
+  max_workers: 50
+  timeout_seconds: 30
+  
+  # MCP (Model Context Protocol) Configuration
+  mcp:
+    schema_version: "v1.2"
+    format: "json"  # Options: json, avro, protobuf
+    max_payload_size_mb: 10
+    trace_id_header: "X-TSCC-Trace-ID"
+    correlation_id_header: "X-TSCC-Correlation-ID"
+    
+  # Event routing rules based on event type and category
+  routing:
+    default_timeout: 15
+    retry_attempts: 3
+    retry_backoff_seconds: 2
+    parallel_processing: true
+    
+    # Event type to sub-agent mapping
+    event_mappings:
+      - event_type: "product_listing"
+        categories: ["Electronics", "Books", "Clothing", "Home"]
+        sub_agents: ["fraud_detection", "counterfeit_detection"]
+        priority: "medium"
+        
+      - event_type: "customer_review"
+        categories: ["all"]
+        sub_agents: ["review_spam", "fraud_detection"]
+        priority: "high"
+        
+      - event_type: "return_request"
+        categories: ["Electronics", "Clothing", "Jewelry"]
+        sub_agents: ["return_anomaly", "fraud_detection"]
+        priority: "high"
+        
+      - event_type: "seller_registration"
+        categories: ["all"]
+        sub_agents: ["fraud_detection"]
+        priority: "critical"
+
+# Sub-Agent Configurations
+sub_agents:
+  fraud_detection:
+    name: "FraudDetectionAgent"
+    service_url: "http://fraud-detection:8001"
+    health_check_endpoint: "/health"
+    timeout_seconds: 10
+    max_retries: 2
+    
+    # Model configuration
+    model:
+      type: "pytorch"
+      version: "v2.1"
+      threshold: 0.75
+      confidence_min: 0.6
+      
+    # Features to extract from MCP
+    features:
+      - "seller_id"
+      - "account_age_days"
+      - "previous_violations"
+      - "transaction_velocity"
+      - "geo_location"
+      - "payment_method"
+      - "device_fingerprint"
+      
+    # Output schema
+    output:
+      risk_score: "float"  # 0.0 - 1.0
+      fraud_probability: "float"
+      risk_factors: "array"
+      recommendation: "string"  # allow, block, review
+      
+  counterfeit_detection:
+    name: "CounterfeitDetectionAgent"
+    service_url: "http://counterfeit-detection:8002"
+    health_check_endpoint: "/health"
+    timeout_seconds: 15
+    max_retries: 2
+    
+    model:
+      type: "computer_vision"
+      version: "v1.5"
+      threshold: 0.8
+      image_analysis: true
+      
+    features:
+      - "product_images"
+      - "product_title"
+      - "product_description"
+      - "brand_name"
+      - "seller_history"
+      - "price_comparison"
+      
+    output:
+      counterfeit_probability: "float"
+      image_similarity_score: "float"
+      brand_mismatch_flags: "array"
+      price_anomaly_score: "float"
+      recommendation: "string"
+      
+  review_spam:
+    name: "ReviewSpamAgent"
+    service_url: "http://review-spam:8003"
+    health_check_endpoint: "/health"
+    timeout_seconds: 8
+    max_retries: 2
+    
+    model:
+      type: "nlp"
+      version: "v3.0"
+      language_models: ["en", "es", "fr", "de", "ja", "zh"]
+      threshold: 0.7
+      
+    features:
+      - "review_text"
+      - "reviewer_id"
+      - "review_timestamp"
+      - "reviewer_history"
+      - "sentiment_score"
+      - "linguistic_patterns"
+      
+    output:
+      spam_probability: "float"
+      reviewer_risk_score: "float"
+      spam_cluster_id: "string"
+      linguistic_anomalies: "array"
+      recommendation: "string"
+      
+  return_anomaly:
+    name: "ReturnAnomalyAgent"
+    service_url: "http://return-anomaly:8004"
+    health_check_endpoint: "/health"
+    timeout_seconds: 12
+    max_retries: 2
+    
+    model:
+      type: "anomaly_detection"
+      version: "v1.8"
+      statistical_model: "isolation_forest"
+      threshold: 0.65
+      
+    features:
+      - "return_reason"
+      - "return_frequency"
+      - "customer_id"
+      - "product_condition"
+      - "return_timeline"
+      - "refund_amount"
+      
+    output:
+      anomaly_z_score: "float"
+      return_abuse_probability: "float"
+      customer_risk_profile: "string"
+      return_pattern_flags: "array"
+      recommendation: "string"
+
+# Risk Assessment & Escalation Rules
+risk_assessment:
+  # Risk thresholds for escalation
+  thresholds:
+    low: 0.3
+    medium: 0.6
+    high: 0.8
+    critical: 0.9
+    
+  # Escalation matrix based on combined risk scores
+  escalation_rules:
+    - condition: "fraud_score >= 0.8 OR counterfeit_probability >= 0.9"
+      action: "immediate_escalation"
+      priority: "critical"
+      notify_legal: true
+      
+    - condition: "review_spam_probability >= 0.8 AND reviewer_risk_score >= 0.7"
+      action: "review_manipulation_alert"
+      priority: "high"
+      
+    - condition: "return_anomaly_z_score >= 2.5 AND return_abuse_probability >= 0.75"
+      action: "return_fraud_investigation"
+      priority: "high"
+      
+    - condition: "combined_risk_score >= 0.6"
+      action: "analyst_review"
+      priority: "medium"
+
+# LLM Integration for Investigation Briefs
+llm_integration:
+  enabled: true
+  provider: "openai"
+  model: "gpt-4"
+  api_key_env: "OPENAI_API_KEY"
+  max_tokens: 1000
+  temperature: 0.3
+  
+  # Trigger conditions for LLM brief generation
+  brief_triggers:
+    - "risk_score >= 0.7"
+    - "critical_escalation == true"
+    - "multiple_agent_flags >= 2"
+    
+  # Brief template configuration
+  brief_template:
+    include_sections:
+      - "executive_summary"
+      - "risk_breakdown"
+      - "agent_findings"
+      - "recommended_actions"
+      - "investigation_priorities"
+
+# Feedback Loop Configuration
+feedback_loop:
+  enabled: true
+  collection_endpoint: "/api/feedback"
+  batch_size: 100
+  processing_schedule: "0 2 * * *"  # Daily at 2 AM
+  
+  # Retraining pipeline
+  retraining:
+    enabled: true
+    minimum_feedback_samples: 500
+    validation_split: 0.2
+    model_update_threshold: 0.05  # Minimum improvement required
+    
+# Monitoring & Observability
+monitoring:
+  metrics_enabled: true
+  health_check_interval: 30
+  performance_logging: true
+  
+  # Key performance indicators
+  kpis:
+    - "time_to_first_detection"
+    - "analyst_case_throughput"
+    - "detection_recall"
+    - "false_positive_rate"
+    - "cost_per_detection"
+    
+# Security & Compliance
+security:
+  encryption_at_rest: true
+  encryption_in_transit: true
+  audit_logging: true
+  role_based_access: true
+  
+  # Data retention policies
+  data_retention:
+    mcp_logs: "90_days"
+    agent_outputs: "1_year"
+    feedback_data: "2_years"
